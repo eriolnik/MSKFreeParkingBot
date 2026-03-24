@@ -1,0 +1,95 @@
+# ===========================================
+# FREE PARKING BOT - .gitignore
+# ===========================================
+
+# --- Конфиденциальные данные ---
+.env
+.env.*
+*.env
+secrets/
+credentials/
+
+# --- Базы данных ---
+*.db
+*.sqlite
+*.sqlite3
+parkings.db
+
+# --- Логи ---
+*.log
+bot_log.txt
+cloudflare.log
+ngrok.log
+
+# --- Резервные копии ---
+*.backup
+*.backup.*
+*.bak
+*.old
+*~
+
+# --- Временные файлы ---
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# --- Кэш Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# --- Виртуальное окружение ---
+venv/
+env/
+ENV/
+.venv/
+
+# --- IDE ---
+.vscode/
+.idea/
+*.iml
+
+# --- Тестовые файлы ---
+test_*.py
+check_*.py
+*_test.py
+
+# --- Скрипты разработки ---
+fix_*.py
+update_*.py
+get_*.py
+*_history.py
+
+# --- Batch файлы для локальной разработки ---
+START_ALL.bat
+RUN.bat
+start_*.bat
+stop_*.bat
+update_*.bat
+add_*.bat
+
+# --- JSON файлы (кроме package.json) ---
+*.json
+!package.json
+
+# --- Внешние бинарники ---
+ngrok/
+cloudflared.exe
+*.exe
+*.zip
+
+# --- Документация для разработки ---
+MAP_SETUP.md
+WEB_APP_SETUP.md
+WEB_APP_READY.md
+DEPLOY_SAFELY.md
+GITHUB_READY.md
+КАК_ИСПОЛЬЗОВАТЬ_ЗАМЕТКИ.md
+ЗАМЕТКИ.md
+START.md

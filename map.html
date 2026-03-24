@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>🅿️ Карта парковок Москвы</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
+    <!-- Telegram Web App -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+        #map { height: 100vh; width: 100%; }
+        
+        /* Плавающие контролы */
+        .controls {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 12px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            max-width: 280px;
+        }
+        .controls h3 { margin-bottom: 10px; font-size: 14px; color: #333; }
+        .controls label { display: block; margin-bottom: 5px; font-size: 12px; color: #666; }
+        .controls select, .controls input {
+            width: 100%;
+            padding: 8px;
+            margin-bottom: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+        }
+        .controls button {
+            width: 100%;
+            padding: 10px;
+            background: #3390ec;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+        .controls button:hover { background: #2775c9; }
+        .controls button.secondary { background: #4CAF50; }
+        .controls button.secondary:hover { background: #45a049; }
+        
+        /* Попап */
+        .parking-popup { font-size: 13px; }
+        .parking-popup b { color: #333; font-size: 14px; }
+        .parking-popup .free { color: #4CAF50; font-weight: 500; }
+        .parking-popup .paid { color: #f44336; font-weight: 500; }
+        .parking-popup .distance { color: #666; font-size: 11px; }
+        .parking-popup button {
+            margin-top: 8px;
+            padding: 8px 12px;
+            background: #3390ec;
+            color: white;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            width: 100%;
+        }
+        .parking-popup button.yandex { background: #fc0; color: #000; }
+        
+        /* Загрузка */
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: white;
+            padding: 30px 40px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+            z-index: 1001;
+            text-align: center;
+        }
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3390ec;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Статистика */
+        .stats {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1000;
+            background: white;
+            padding: 10px 15px;
+            border-radius: 12px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.15);
+            font-size: 12px;
+        }
+        
+        /* Адаптив для мобильных */
+        @media (max-width: 480px) {
+            .controls {
+                top: auto;
+                bottom: 80px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    
+    <div class="loading" id="loading">
+        <div class="loading-spinner"></div>
+        <div>⏳ Загрузка парковок...</div>
+        <div style="font-size: 12px; color: #666; margin-top: 10px;">Подождите, загружаем <span id="loading-count">0</span> парковок</div>
+    </div>
+    
+    <div class="controls">
+        <h3>🅿️ Фильтр парковок</h3>
+        <label>Тип парковок:</label>
+        <select id="filter-type">
+            <option value="all">Все</option>
+            <option value="free">Только бесплатные</option>
+            <option value="paid">Только платные</option>
+        </select>
+        <label>Радиус от центра (км):</label>
+        <input type="range" id="filter-radius" min="1" max="10" value="5" step="0.5">
+        <div style="text-align: center; margin-bottom: 10px; font-size: 12px;">
+            <span id="radius-value">5 км</span>
+        </div>
+        <button onclick="applyFilter()">Применить фильтр</button>
+        <button class="secondary" onclick="locateUser()">📍 Моё местоположение</button>
+    </div>
+    
+    <div class="stats" id="stats">
+        Загрузка...
+    </div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    
+    <script>
+        // Инициализация Telegram Web App
+        const tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        
+        // Тема Telegram
+        const theme = tg.themeParams;
+        
+        // Инициализация карты (центр Москвы)
+        const map = L.map('map', {
+            zoomControl: false,
+            attributionControl: false
+        }).setView([55.751244, 37.618423], 10);
+        
+        // Добавляем зум в правый нижний угол
+        L.control.zoom({ position: 'bottomright' }).addTo(map);
+        
+        // Слой OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap',
+            maxZoom: 19
+        }).addTo(map);
+        
+        // Кластеризация маркеров
+        const markersCluster = L.markerClusterGroup({
+            showCoverageOnHover: false,
+            maxClusterRadius: 50,
+            disableClusteringAtZoom: 16
+        });
+        map.addLayer(markersCluster);
+        
+        let allParkings = [];
+        let userMarker = null;
+        let userCircle = null;
+        
+        // Иконки для парковок
+        function createIcon(color) {
+            return L.divIcon({
+                html: `<div style="background: ${color}; width: 16px; height: 16px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>`,
+                className: 'custom-marker',
+                iconSize: [16, 16]
+            });
+        }
+        
+        const freeIcon = createIcon('#4CAF50');
+        const paidIcon = createIcon('#f44336');
+        
+        // Загрузка парковок
+        async function loadParkings() {
+            try {
+                const response = await fetch('parkings.json');
+                if (!response.ok) throw new Error('Не удалось загрузить');
+                allParkings = await response.json();
+                
+                document.getElementById('loading-count').textContent = allParkings.length;
+                
+                // Рендерим маркеры
+                renderMarkers(allParkings);
+                updateStats(allParkings);
+                
+                // Скрываем загрузку
+                setTimeout(() => {
+                    document.getElementById('loading').style.display = 'none';
+                }, 500);
+                
+                // Сообщаем Telegram
+                tg.sendData(JSON.stringify({ action: 'loaded', count: allParkings.length }));
+                
+            } catch (error) {
+                console.error('Ошибка:', error);
+                document.getElementById('loading').innerHTML = `
+                    <div style="color: #f44336;">❌ Ошибка загрузки</div>
+                    <div style="font-size: 12px; margin-top: 10px; color: #666;">
+                        Проверьте подключение к интернету
+                    </div>
+                `;
+            }
+        }
+        
+        // Отрисовка маркеров с кластеризацией
+        function renderMarkers(parkings) {
+            markersCluster.clearLayers();
+            
+            parkings.forEach(p => {
+                const icon = p.is_free ? freeIcon : paidIcon;
+                const marker = L.marker([p.latitude, p.longitude], { icon });
+                
+                const freeText = p.is_free ? '<span class="free">🆓 Бесплатная</span>' : '<span class="paid">💰 Платная</span>';
+                const address = p.address || 'Адрес не указан';
+                
+                const popup = L.popup({ maxWidth: 250, className: 'parking-popup' });
+                const popupContent = `
+                    <div class="parking-popup">
+                        <b>${p.name}</b><br>
+                        ${freeText}<br>
+                        <span class="distance">📍 ${address}</span><br>
+                        <button onclick="openNavigator(${p.latitude}, ${p.longitude})">🧭 Навигатор</button>
+                        <button class="yandex" onclick="openYandexMaps(${p.latitude}, ${p.longitude})">📍 Яндекс.Карты</button>
+                    </div>
+                `;
+                popup.setContent(popupContent);
+                marker.bindPopup(popup);
+                markersCluster.addLayer(marker);
+            });
+        }
+        
+        // Обновление статистики
+        function updateStats(parkings) {
+            const free = parkings.filter(p => p.is_free).length;
+            const paid = parkings.length - free;
+            document.getElementById('stats').innerHTML = `
+                <b>Всего:</b> ${parkings.length}<br>
+                <span style="color: #4CAF50;">🆓 Бесплатных:</span> ${free}<br>
+                <span style="color: #f44336;">💰 Платных:</span> ${paid}
+            `;
+        }
+        
+        // Применение фильтра
+        function applyFilter() {
+            const type = document.getElementById('filter-type').value;
+            const radius = parseFloat(document.getElementById('filter-radius').value);
+            document.getElementById('radius-value').textContent = radius + ' км';
+            
+            let filtered = allParkings;
+            
+            // Фильтр по типу
+            if (type === 'free') {
+                filtered = filtered.filter(p => p.is_free);
+            } else if (type === 'paid') {
+                filtered = filtered.filter(p => !p.is_free);
+            }
+            
+            // Фильтр по радиусу от центра Москвы
+            const centerLat = 55.751244;
+            const centerLon = 37.618423;
+            filtered = filtered.filter(p => {
+                const dist = Math.sqrt(
+                    Math.pow(p.latitude - centerLat, 2) * 111 +
+                    Math.pow(p.longitude - centerLon, 2) * 111 * 0.7
+                );
+                return dist <= radius;
+            });
+            
+            renderMarkers(filtered);
+            updateStats(filtered);
+            
+            // Телеграму
+            tg.sendData(JSON.stringify({
+                action: 'filter',
+                type: type,
+                radius: radius,
+                count: filtered.length
+            }));
+        }
+        
+        // Определение местоположения
+        function locateUser() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(position => {
+                    const lat = position.coords.latitude;
+                    const lon = position.coords.longitude;
+                    
+                    if (userMarker) map.removeLayer(userMarker);
+                    if (userCircle) map.removeLayer(userCircle);
+                    
+                    userMarker = L.marker([lat, lon], {
+                        icon: createIcon('#2196F3')
+                    }).addTo(map).bindPopup('Вы здесь').openPopup();
+                    
+                    userCircle = L.circle([lat, lon], { 
+                        radius: 1000, 
+                        color: '#2196F3', 
+                        fillColor: '#2196F3', 
+                        fillOpacity: 0.1 
+                    }).addTo(map);
+                    
+                    map.setView([lat, lon], 13);
+                    
+                    // Фильтруем парковки рядом
+                    const radiusKm = parseFloat(document.getElementById('filter-radius').value);
+                    const nearby = allParkings.filter(p => {
+                        const dist = Math.sqrt(
+                            Math.pow(p.latitude - lat, 2) * 111 +
+                            Math.pow(p.longitude - lon, 2) * 111 * 0.7
+                        );
+                        return dist <= radiusKm;
+                    });
+                    
+                    renderMarkers(nearby);
+                    updateStats(nearby);
+                    
+                    tg.sendData(JSON.stringify({
+                        action: 'location',
+                        latitude: lat,
+                        longitude: lon,
+                        nearby: nearby.length
+                    }));
+                    
+                }, () => {
+                    tg.showAlert('Не удалось получить местоположение');
+                });
+            } else {
+                tg.showAlert('Геолокация не поддерживается');
+            }
+        }
+        
+        // Открыть навигатор
+        function openNavigator(lat, lon) {
+            window.open(`https://yandex.ru/maps/?rtext=~${lat},${lon}&rtt=auto`, '_blank');
+        }
+        
+        // Открыть Яндекс.Карты
+        function openYandexMaps(lat, lon) {
+            window.open(`https://yandex.ru/maps/?pt=${lon},${lat}&z=18`, '_blank');
+        }
+        
+        // Обновление радиуса
+        document.getElementById('filter-radius').addEventListener('input', (e) => {
+            document.getElementById('radius-value').textContent = e.target.value + ' км';
+        });
+        
+        // Загружаем парковки
+        loadParkings();
+    </script>
+</body>
+</html>
