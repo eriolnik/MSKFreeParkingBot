@@ -354,12 +354,14 @@ def create_main_keyboard() -> types.ReplyKeyboardMarkup:
 
 def create_map_webapp_button(latitude: float = 55.751244, longitude: float = 37.618423) -> types.InlineKeyboardMarkup:
     """Создать inline кнопку с картой"""
-    # Всегда отправляем ссылку на локальную карту
+    # GitHub Pages URL - работает везде!
+    github_pages_url = "https://eriolnik.github.io/MSKFreeParkingBot/map.html"
+    
     return types.InlineKeyboardMarkup(
         inline_keyboard=[[
             types.InlineKeyboardButton(
-                text="🗺️ Открыть карту (в браузере)",
-                url=f"http://localhost:8000/map.html?lat={latitude}&lon={longitude}"
+                text="🗺️ Открыть карту парковок",
+                url=f"{github_pages_url}?lat={latitude}&lon={longitude}"
             )
         ]]
     )
